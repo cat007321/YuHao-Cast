@@ -114,6 +114,14 @@ object CastState {
     @Volatile
     var fallbackUri: String = ""
 
+    /** 当前投屏内容是否为图片（图片走图片渲染，不走 ExoPlayer） */
+    @Volatile
+    var currentIsImage: Boolean = false
+
+    /** 图片代际：图片地址变化时 +1，播放界面据此重新加载 */
+    @Volatile
+    var imageEpoch: Int = 0
+
     /** 状态变化监听（主线程通知 UI / 事件订阅） */
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 

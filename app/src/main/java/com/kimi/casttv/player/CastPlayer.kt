@@ -149,8 +149,10 @@ class CastPlayer(private val appContext: Context) {
             override fun run() {
                 tickCount++
                 runCatching {
-                    CastState.positionMs = player.currentPosition
-                    if (player.duration > 0) CastState.durationMs = player.duration
+                    if (!CastState.currentIsImage) {
+                        CastState.positionMs = player.currentPosition
+                        if (player.duration > 0) CastState.durationMs = player.duration
+                    }
                 }
                 if (CastState.transportState == "PLAYING") {
                     android.util.Log.d(
@@ -169,6 +171,12 @@ class CastPlayer(private val appContext: Context) {
     /** 收到 SetAVTransportURI + Play */
     fun play(uri: String, title: String) {
         android.util.Log.e("CastUrl", "play uri=$uri")
+        // 图片投屏：手机相册类 App 会把图片 URL 直接 SetAVTransportURI+Play，
+        // 交给 ExoPlayer 会按视频解析直接 OOM，这里分流到图片渲染
+        if (isImageUri(uri)) {
+            playImage(uri, title)
+            return
+        }
         // 腾讯云直播类的 rtmp:// 地址通常同时提供 HLS(.m3u8)；
         // 其 RTMP 流多为 HEVC+FLV(codec id 12)，ExoPlayer 的 FLV 解封装不支持，
         // 改写为 HLS 后由 TS 解封装处理（HEVC 解码依赖设备解码器）。
@@ -178,11 +186,42 @@ class CastPlayer(private val appContext: Context) {
         playInternal(primary, title, fallback)
     }
 
+    /** 依据 DLNA 元数据（imageItem）或扩展名判断是否为图片地址 */
+    private fun isImageUri(uri: String): Boolean {
+        if (CastState.currentMeta.contains("imageItem")) return true
+        val path = uri.substringBefore('?').substringBefore('#').lowercase()
+        return path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
+            path.endsWith(".gif") || path.endsWith(".webp") || path.endsWith(".bmp")
+    }
+
+    /** 图片投屏：停掉视频播放，切到图片渲染（PlaybackActivity 监听 imageEpoch 加载） */
+    private fun playImage(uri: String, title: String) {
+        mainHandler.post {
+            android.util.Log.d("CastPlayer", "playImage() $uri")
+            runCatching { player.stop() }
+            runCatching { player.clearMediaItems() }
+            CastState.currentUri = uri
+            CastState.title = title.ifEmpty { uri.substringAfterLast('/').substringBefore('?') }
+            CastState.currentIsImage = true
+            CastState.imageEpoch++
+            CastState.lastError = ""
+            CastState.fallbackUri = ""
+            CastState.transportState = "PLAYING"
+            CastState.durationMs = 0L
+            CastState.positionMs = 0L
+            CastState.notifyChanged()
+            GenaManager.notifyAvTransport()
+            openPlaybackScreen()
+        }
+    }
+
     private fun playInternal(uri: String, title: String, fallbackUri: String?) {
         mainHandler.post {
             android.util.Log.d("CastPlayer", "play() executing on main thread")
             CastState.currentUri = uri
             CastState.title = title.ifEmpty { uri.substringAfterLast('/').substringBefore('?') }
+            CastState.currentIsImage = false
+            CastState.imageEpoch++
             CastState.lastError = ""
             CastState.fallbackUri = fallbackUri ?: ""
             CastState.transportState = "TRANSITIONING"
@@ -213,8 +252,13 @@ class CastPlayer(private val appContext: Context) {
 
     fun pause() {
         mainHandler.post {
-            player.pause()
-            CastState.transportState = "PAUSED_PLAYBACK"
+            if (CastState.currentIsImage) {
+                // 图片无"播放"动作，暂停即冻结展示
+                CastState.transportState = "PAUSED_PLAYBACK"
+            } else {
+                player.pause()
+                CastState.transportState = "PAUSED_PLAYBACK"
+            }
             CastState.notifyChanged()
             GenaManager.notifyAvTransport()
         }
@@ -225,6 +269,8 @@ class CastPlayer(private val appContext: Context) {
         mainHandler.post {
             player.stop()
             player.clearMediaItems()
+            CastState.currentIsImage = false
+            CastState.imageEpoch++
             CastState.transportState = "STOPPED"
             CastState.durationMs = -1L
             CastState.notifyChanged()
@@ -234,6 +280,13 @@ class CastPlayer(private val appContext: Context) {
 
     fun resume() {
         mainHandler.post {
+            if (CastState.currentIsImage) {
+                CastState.transportState = "PLAYING"
+                CastState.notifyChanged()
+                GenaManager.notifyAvTransport()
+                openPlaybackScreen()
+                return@post
+            }
             if (player.mediaItemCount == 0 && CastState.currentUri.isNotEmpty()) {
                 player.setMediaItem(MediaItem.fromUri(CastState.currentUri))
                 player.prepare()
@@ -245,6 +298,7 @@ class CastPlayer(private val appContext: Context) {
     }
 
     fun seekTo(ms: Long) {
+        if (CastState.currentIsImage) return // 图片不支持快进快退
         mainHandler.post {
             player.seekTo(ms)
             GenaManager.notifyAvTransport()

@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Button
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.kimi.casttv.dlna.CastState
@@ -12,7 +11,7 @@ import com.kimi.casttv.dlna.DlnaService
 
 /**
  * TV 主界面（正式版）：应用名 / 投屏状态 / 设备名 / 局域网地址。
- * 诊断信息已移至「设置」页。
+ * 无设置入口：设备名与更新服务器按默认值运行，更新检查全自动。
  */
 class MainActivity : android.app.Activity() {
 
@@ -43,10 +42,6 @@ class MainActivity : android.app.Activity() {
         deviceNameText = findViewById(R.id.deviceNameText)
         ipText = findViewById(R.id.ipText)
         statusText = findViewById(R.id.statusText)
-
-        findViewById<Button>(R.id.settingsButton).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
 
         // 启动投屏服务
         ContextCompat.startForegroundService(this, Intent(this, DlnaService::class.java))

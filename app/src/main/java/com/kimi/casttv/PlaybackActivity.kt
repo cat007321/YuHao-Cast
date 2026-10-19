@@ -12,13 +12,20 @@ import com.kimi.casttv.dlna.GenaManager
 class PlaybackActivity : android.app.Activity() {
 
     private var playerView: PlayerView? = null
+    private var imageView: android.widget.ImageView? = null
     private var errorText: android.widget.TextView? = null
     private var urlText: android.widget.TextView? = null
     private var seekText: android.widget.TextView? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
+    /** 已加载到 ImageView 的图片代际（-1 = 未加载） */
+    @Volatile
+    private var loadedImageEpoch = -1
+    private var imageLoading = false
+
     private val statusUpdater = object : Runnable {
         override fun run() {
+            updateImageLayer()
             val err = CastState.lastError
             if (err.isNotEmpty() && System.currentTimeMillis() - CastState.lastErrorAt < 60_000) {
                 errorText?.visibility = android.view.View.VISIBLE
@@ -47,6 +54,7 @@ class PlaybackActivity : android.app.Activity() {
                 controllerVisible = visibility == android.view.View.VISIBLE
             })
         }
+        imageView = findViewById(R.id.imageView)
         errorText = findViewById(R.id.errorText)
         urlText = findViewById(R.id.urlText)
         seekText = findViewById(R.id.seekText)
@@ -54,7 +62,7 @@ class PlaybackActivity : android.app.Activity() {
 
     override fun onStart() {
         super.onStart()
-        playerView?.player = CastState.player
+        playerView?.player = if (CastState.currentIsImage) null else CastState.player
         applyVolume()
         uiHandler.post(statusUpdater)
     }
@@ -63,6 +71,82 @@ class PlaybackActivity : android.app.Activity() {
         uiHandler.removeCallbacks(statusUpdater)
         playerView?.player = null
         super.onStop()
+    }
+
+    // ---------------- 图片投屏渲染 ----------------
+
+    /** 按 CastState 切换 视频层/图片层，并在图片地址变化（epoch 变化）时重新加载 */
+    private fun updateImageLayer() {
+        if (CastState.currentIsImage) {
+            playerView?.visibility = android.view.View.GONE
+            imageView?.visibility = android.view.View.VISIBLE
+            val epoch = CastState.imageEpoch
+            if (epoch != loadedImageEpoch && !imageLoading) {
+                loadedImageEpoch = epoch
+                loadImage(CastState.currentUri)
+            }
+        } else {
+            if (imageView?.visibility == android.view.View.VISIBLE) {
+                imageView?.setImageDrawable(null)
+                imageView?.visibility = android.view.View.GONE
+                loadedImageEpoch = -1
+            }
+            playerView?.visibility = android.view.View.VISIBLE
+            playerView?.player = CastState.player
+        }
+    }
+
+    /** 后台线程下载图片并按屏幕尺寸降采样解码（原图可能高达几千万像素，直接解码必 OOM） */
+    private fun loadImage(uri: String) {
+        if (uri.isEmpty()) return
+        imageLoading = true
+        val maxW = 1920
+        val maxH = 1080
+        Thread {
+            var bitmap: android.graphics.Bitmap? = null
+            var errMsg = ""
+            try {
+                val conn = java.net.URL(uri).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 20_000
+                conn.instanceFollowRedirects = true
+                conn.inputStream.use { input ->
+                    // 第一遍只读尺寸
+                    val bytes = input.readBytes()
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                        errMsg = "无法识别的图片格式"
+                    } else {
+                        // 第二遍按 1920x1080 上限降采样
+                        var sample = 1
+                        while (bounds.outWidth / (sample * 2) >= maxW || bounds.outHeight / (sample * 2) >= maxH) {
+                            sample *= 2
+                        }
+                        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+                        bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                        if (bitmap == null) errMsg = "图片解码失败"
+                    }
+                }
+            } catch (e: OutOfMemoryError) {
+                errMsg = "图片过大，内存不足"
+            } catch (e: Exception) {
+                errMsg = e.javaClass.simpleName + ": " + (e.message ?: "")
+            }
+            runOnUiThread {
+                imageLoading = false
+                // 加载期间又切换了内容：丢弃过期结果
+                if (!CastState.currentIsImage || CastState.imageEpoch != loadedImageEpoch) return@runOnUiThread
+                if (bitmap != null) {
+                    imageView?.setImageBitmap(bitmap)
+                    CastState.lastError = ""
+                } else {
+                    imageView?.setImageDrawable(null)
+                    CastState.lastError = "图片加载失败：$errMsg"
+                    CastState.lastErrorAt = System.currentTimeMillis()
+                }
+            }
+        }.apply { isDaemon = true }.start()
     }
 
     @Deprecated("Deprecated in Java")
@@ -84,6 +168,8 @@ class PlaybackActivity : android.app.Activity() {
             runCatching { p.clearMediaItems() }
         }
         CastState.currentUri = ""
+        CastState.currentIsImage = false
+        CastState.imageEpoch++
         CastState.durationMs = -1L
         CastState.transportState = "STOPPED"
         CastState.notifyChanged()
@@ -168,6 +254,8 @@ class PlaybackActivity : android.app.Activity() {
         }
         CastState.currentUri = ""
         CastState.title = ""
+        CastState.currentIsImage = false
+        CastState.imageEpoch++
         CastState.transportState = "STOPPED"
         CastState.durationMs = -1L
         CastState.notifyChanged()
@@ -181,6 +269,7 @@ class PlaybackActivity : android.app.Activity() {
 
     /** 相对跳转 deltaMs 毫秒，并在大屏闪现位置提示。长按方向键时系统会派发重复按下事件，天然支持连续快进 */
     private fun seekBy(deltaMs: Long) {
+        if (CastState.currentIsImage) return // 图片不支持快进快退
         val p = CastState.player ?: return
         val duration = p.duration.takeIf { it > 0 }
         var target = p.currentPosition + deltaMs
