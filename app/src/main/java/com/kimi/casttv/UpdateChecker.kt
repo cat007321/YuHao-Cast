@@ -21,9 +21,18 @@ object UpdateChecker {
     private const val KEY_UPDATE_URL = "update_url"
     private const val KEY_LAST_CHECK = "last_update_check"
 
-    /** 默认更新源：GitHub 仓库中的 version.json（经 jsDelivr CDN 加速，国内可直接访问） */
+    /** 默认更新源：GitHub 仓库 version.json，经 ghproxy 加速（国内电视可直接访问、内容实时）。
+     *  jsDelivr 的 @main 解析缓存最长 12 小时且会故障回源，不再作为首选。 */
     const val DEFAULT_UPDATE_URL =
-        "https://cdn.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json"
+        "https://ghproxy.net/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json"
+
+    /** 全部更新源镜像：首选失败后依次尝试 */
+    private val UPDATE_MIRRORS = listOf(
+        "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json",
+        "https://cdn.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
+        "https://fastly.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
+        "https://gcore.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json"
+    )
 
     class Info(
         val versionCode: Long,
@@ -107,17 +116,9 @@ object UpdateChecker {
         return Result.Error(lastErr.ifEmpty { "所有更新源均不可达" })
     }
 
-    /** 生成更新源候选列表：jsDelivr 三个区域节点 + GitHub raw 镜像 */
-    private fun fetchCandidates(url: String): List<String> {
-        val out = mutableListOf(url)
-        val ghPath = "cat007321/YuHao-Cast@main/update/version.json"
-        if ("://cdn.jsdelivr.net/" in url || "jsdelivr" in url) {
-            out += "https://fastly.jsdelivr.net/gh/$ghPath"
-            out += "https://gcore.jsdelivr.net/gh/$ghPath"
-            out += "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json"
-        }
-        return out.distinct()
-    }
+    /** 生成更新源候选列表：配置的源优先，其后轮询全部镜像 */
+    private fun fetchCandidates(url: String): List<String> =
+        (listOf(url) + UPDATE_MIRRORS).distinct()
 
     private fun tryOne(url: String, currentCode: Long): Result {
         return runCatching {

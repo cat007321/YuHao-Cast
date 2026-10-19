@@ -1,1 +1,1 @@
-{"versionCode":28,"versionName":"2.1.6","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.6/YuHaoCast-v2.1.6.apk","notes":"1) 检查更新/下载更新自动轮换多个镜像源，电视网络打不开 GitHub 也能正常更新；2) 播放缓冲上限按设备内存自适应提升（海信电视约 80MB），大视频缓存明显减少"}
+{"versionCode":29,"versionName":"2.1.7","url":"https://ghproxy.net/https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.7/YuHaoCast-v2.1.7.apk","notes":"更新源切换到 ghproxy 实时镜像（jsDelivr 缓存故障会导致电视收不到更新），镜像轮询策略优化"}
