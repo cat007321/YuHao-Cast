@@ -26,8 +26,11 @@ object UpdateChecker {
     const val DEFAULT_UPDATE_URL =
         "https://ghproxy.net/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json"
 
-    /** 全部更新源镜像：首选失败后依次尝试 */
+    /** 全部更新源镜像：首选失败后依次尝试。
+     *  gh-proxy.com 与 ghproxy.net 同为实时镜像（回源 GitHub 无缓存），排最前；
+     *  jsDelivr 系为缓存镜像（最长 12 小时），仅作兜底，放在实时镜像之后。 */
     private val UPDATE_MIRRORS = listOf(
+        "https://gh-proxy.com/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json",
         "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json",
         "https://cdn.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
         "https://fastly.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
@@ -239,6 +242,7 @@ object UpdateChecker {
         val out = mutableListOf(url)
         if ("://github.com/" in url) {
             out += "https://ghproxy.net/" + url
+            out += "https://gh-proxy.com/" + url
             out += "https://ghfast.top/" + url
         }
         return out.distinct()

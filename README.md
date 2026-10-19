@@ -55,6 +55,7 @@ git push origin main --tags
 
 ## 版本历史
 
+- v2.1.9 (build 31)：更新源增加 gh-proxy.com 实时镜像（ghproxy.net 故障时仍能收到更新提示）；下载地址改为 GitHub 直链并自动轮换 ghproxy / gh-proxy / ghfast 三个加速镜像。含 v2.1.8 全部内容
 - v2.1.8 (build 30)：播放缓冲上限放开至 256MB 并按设备堆内存自适应——4GB 大内存设备（极米 H6 等）缓冲可达 20~40 秒，128MB 堆设备保持约 80MB 不变
 - v2.1.7 (build 29)：更新源首选 ghproxy 实时镜像（jsDelivr @main 缓存最长 12 小时且会故障，导致电视收不到更新提示），全部镜像依次轮询
 - v2.1.6 (build 28)：检查更新与下载更新自动轮换多个镜像源（jsDelivr 三节点 + GitHub 加速镜像），电视网络受限也能正常更新；播放缓冲上限按设备内存自适应（海信电视 128MB 堆≈80MB 缓冲，回看缓冲缩至 2s 让位）
