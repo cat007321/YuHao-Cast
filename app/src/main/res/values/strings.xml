@@ -15,7 +15,7 @@
     <string name="settings_version">版本</string>
     <string name="settings_update">检查更新</string>
     <string name="settings_update_url">更新服务器地址</string>
-    <string name="settings_update_url_hint">存放 version.json 的地址，留空则不检查更新</string>
+    <string name="settings_update_url_hint">默认从 GitHub 检查更新；清空并保存可停用</string>
     <string name="settings_update_url_saved">更新服务器地址已保存</string>
     <string name="settings_update_checking">正在检查更新…</string>
     <string name="settings_update_latest">已是最新版本</string>

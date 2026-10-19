@@ -22,6 +22,10 @@ object UpdateChecker {
     private const val KEY_UPDATE_URL = "update_url"
     private const val KEY_LAST_CHECK = "last_update_check"
 
+    /** 默认更新源：GitHub 仓库中的 version.json（经 jsDelivr CDN 加速，国内可直接访问） */
+    const val DEFAULT_UPDATE_URL =
+        "https://cdn.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json"
+
     class Info(
         val versionCode: Long,
         val versionName: String,
@@ -46,10 +50,10 @@ object UpdateChecker {
         activity.packageManager.getPackageInfo(activity.packageName, 0).versionName ?: "?"
     }.getOrDefault("?")
 
-    /** 读取更新服务器地址（未配置返回空串） */
+    /** 读取更新服务器地址；用户清空保存后返回空串（表示停用自动检查） */
     fun updateUrl(activity: Activity): String =
         activity.getSharedPreferences(DlnaPrefs.NAME, android.content.Context.MODE_PRIVATE)
-            .getString(KEY_UPDATE_URL, "") ?: ""
+            .getString(KEY_UPDATE_URL, DEFAULT_UPDATE_URL) ?: DEFAULT_UPDATE_URL
 
     fun saveUpdateUrl(activity: Activity, url: String) {
         activity.getSharedPreferences(DlnaPrefs.NAME, android.content.Context.MODE_PRIVATE)
