@@ -94,7 +94,7 @@
             android:layout_marginTop="12dp"
             android:text="@string/settings_update" />
 
-        <!-- 版本与诊断 -->
+        <!-- 版本信息 -->
         <TextView
             android:id="@+id/versionText"
             android:layout_width="wrap_content"
@@ -102,22 +102,5 @@
             android:layout_marginTop="32dp"
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:text="@string/settings_diagnostics"
-            android:textColor="@color/text_primary"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/diagText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
     </LinearLayout>
 </ScrollView>

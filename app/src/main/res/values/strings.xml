@@ -11,7 +11,6 @@
     <string name="settings_device_name_hint">手机投屏时显示的设备名</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">已保存，约 10 秒内对手机端生效（AirPlay 需重启应用）</string>
-    <string name="settings_diagnostics">诊断信息</string>
     <string name="settings_version">版本</string>
     <string name="settings_update">检查更新</string>
     <string name="settings_update_url">更新服务器地址</string>
