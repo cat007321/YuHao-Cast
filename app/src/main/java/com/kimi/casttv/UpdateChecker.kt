@@ -93,13 +93,37 @@ object UpdateChecker {
         }
     }
 
-    /** 同步检查（须在后台线程调用）。 */
+    /** 同步检查（须在后台线程调用）。
+     *  电视网络访问单个 CDN 可能失败/被墙：默认源自动轮换多个镜像，全失败才报错。 */
     fun check(url: String, currentCode: Long): Result {
         if (url.isEmpty()) return Result.Error("未配置更新服务器地址")
+        var lastErr = ""
+        for (candidate in fetchCandidates(url)) {
+            val result = tryOne(candidate, currentCode)
+            if (result !is Result.Error) return result
+            lastErr = (result as Result.Error).message
+            android.util.Log.w("UpdateChecker", "check via $candidate failed: $lastErr")
+        }
+        return Result.Error(lastErr.ifEmpty { "所有更新源均不可达" })
+    }
+
+    /** 生成更新源候选列表：jsDelivr 三个区域节点 + GitHub raw 镜像 */
+    private fun fetchCandidates(url: String): List<String> {
+        val out = mutableListOf(url)
+        val ghPath = "cat007321/YuHao-Cast@main/update/version.json"
+        if ("://cdn.jsdelivr.net/" in url || "jsdelivr" in url) {
+            out += "https://fastly.jsdelivr.net/gh/$ghPath"
+            out += "https://gcore.jsdelivr.net/gh/$ghPath"
+            out += "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json"
+        }
+        return out.distinct()
+    }
+
+    private fun tryOne(url: String, currentCode: Long): Result {
         return runCatching {
             val conn = URL(url).openConnection() as HttpURLConnection
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code != 200) return Result.Error("HTTP $code")
@@ -178,48 +202,19 @@ object UpdateChecker {
             var outFile: java.io.File? = null
             var errMsg = ""
             try {
-                val conn = URL(info.url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 20_000
-                conn.instanceFollowRedirects = true
-                if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
-                val total = conn.contentLengthLong
-                val dir = java.io.File(activity.cacheDir, "updates")
-                dir.mkdirs()
-                // 清掉历史更新包，避免缓存目录堆积
-                dir.listFiles()?.forEach { it.delete() }
-                outFile = java.io.File(dir, "update-v${info.versionName}.apk")
-                var downloaded = 0L
-                var lastPost = 0L
-                conn.inputStream.use { input ->
-                    java.io.FileOutputStream(outFile).use { output ->
-                        val buf = ByteArray(64 * 1024)
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            output.write(buf, 0, n)
-                            downloaded += n
-                            val now = System.currentTimeMillis()
-                            // 每 200ms 刷新一次进度，避免频繁刷 UI
-                            if (now - lastPost > 200 && total > 0) {
-                                lastPost = now
-                                val pct = (downloaded * 100 / total).toInt()
-                                val mbDone = downloaded / 1048576.0
-                                val mbTotal = total / 1048576.0
-                                mainHandler.post {
-                                    if (activity.isFinishing || activity.isDestroyed) return@post
-                                    progressBar.isIndeterminate = false
-                                    progressBar.progress = pct
-                                    percentText.text = String.format(
-                                        "已下载 %.1f / %.1f MB（%d%%）", mbDone, mbTotal, pct
-                                    )
-                                }
-                            }
-                        }
+                // GitHub 下载在部分网络下被墙/超时：自动轮换镜像源
+                var lastErr = ""
+                for (dlUrl in downloadCandidates(info.url)) {
+                    try {
+                        outFile = downloadOne(dlUrl, info.versionName, activity.cacheDir, mainHandler, activity, progressBar, percentText)
+                        break
+                    } catch (t: Throwable) {
+                        lastErr = t.message ?: t.javaClass.simpleName
+                        android.util.Log.w("UpdateChecker", "download via $dlUrl failed: $lastErr")
+                        outFile = null
                     }
                 }
-                conn.disconnect()
-                if (total > 0 && downloaded < total) throw java.io.IOException("下载不完整（$downloaded/$total）")
+                if (outFile == null) throw java.io.IOException(lastErr.ifEmpty { "所有下载源均失败" })
             } catch (t: Throwable) {
                 errMsg = t.message ?: t.javaClass.simpleName
                 outFile?.delete()
@@ -236,6 +231,67 @@ object UpdateChecker {
                 }
             }
         }
+    }
+
+    /** 生成下载地址候选：GitHub 原始地址 + 国内常用 GitHub 加速镜像 */
+    private fun downloadCandidates(url: String): List<String> {
+        val out = mutableListOf(url)
+        if ("://github.com/" in url) {
+            out += "https://ghproxy.net/" + url
+            out += "https://ghfast.top/" + url
+        }
+        return out.distinct()
+    }
+
+    /** 从单个地址下载 APK 到缓存目录，带进度回调；失败抛异常 */
+    private fun downloadOne(
+        dlUrl: String, versionName: String, cacheDir: java.io.File,
+        mainHandler: Handler, activity: Activity,
+        progressBar: android.widget.ProgressBar, percentText: android.widget.TextView
+    ): java.io.File {
+        val conn = URL(dlUrl).openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 20_000
+        conn.instanceFollowRedirects = true
+        if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+        val total = conn.contentLengthLong
+        val dir = java.io.File(cacheDir, "updates")
+        dir.mkdirs()
+        // 清掉历史更新包，避免缓存目录堆积
+        dir.listFiles()?.forEach { it.delete() }
+        val outFile = java.io.File(dir, "update-v$versionName.apk")
+        var downloaded = 0L
+        var lastPost = 0L
+        conn.inputStream.use { input ->
+            java.io.FileOutputStream(outFile).use { output ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    output.write(buf, 0, n)
+                    downloaded += n
+                    val now = System.currentTimeMillis()
+                    // 每 200ms 刷新一次进度，避免频繁刷 UI
+                    if (now - lastPost > 200 && total > 0) {
+                        lastPost = now
+                        val pct = (downloaded * 100 / total).toInt()
+                        val mbDone = downloaded / 1048576.0
+                        val mbTotal = total / 1048576.0
+                        mainHandler.post {
+                            if (activity.isFinishing || activity.isDestroyed) return@post
+                            progressBar.isIndeterminate = false
+                            progressBar.progress = pct
+                            percentText.text = String.format(
+                                "已下载 %.1f / %.1f MB（%d%%）", mbDone, mbTotal, pct
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        conn.disconnect()
+        if (total > 0 && downloaded < total) throw java.io.IOException("下载不完整（$downloaded/$total）")
+        return outFile
     }
 
     /** 下载完成自动调起系统安装器（系统弹安装确认框，用户点「安装」即可） */

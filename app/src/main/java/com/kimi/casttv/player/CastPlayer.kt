@@ -25,15 +25,23 @@ class CastPlayer(private val appContext: Context) {
 
     private val loadControl = DefaultLoadControl.Builder()
         // 关键：按字节封顶缓冲，而不是只按时间。手机 4K 长视频（10~30GB 片源）
-        // 码率 40~100Mbps，按时间算缓冲会无限涨、把 128MB 堆打爆。
-        // 64MB 封顶：100Mbps 下约 5 秒、50Mbps 下约 10 秒、1080p 下约 60 秒；
-        // 缓冲量不再随码率失控，又足够吸收 WiFi 抖动，避免"总是缓存"
-        .setTargetBufferBytes(64 * 1024 * 1024)
+        // 码率 40~100Mbps，按时间算缓冲会无限涨、把堆打爆。
+        // 缓冲上限按设备内存自适应：堆上限 - 48MB 固定开销，夹在 [32MB, 96MB]；
+        // 海信电视（128MB 堆）≈ 80MB：100Mbps 下约 6.4 秒、50Mbps 下约 13 秒、1080p 约 80 秒
+        .setTargetBufferBytes(bufferCapBytes())
         // 起播缓冲加深：首次起播等 4 秒、卡顿后再起播等 8 秒，宁可多等也不反复卡
         .setBufferDurationsMs(10_000, 15_000, 4_000, 8_000)
-        // 回看缓冲缩到 5s：降低常驻内存，快进回退稍慢但稳定
-        .setBackBuffer(5_000, false)
+        // 回看缓冲缩到 2s：给播放缓冲让出内存
+        .setBackBuffer(2_000, false)
         .build()
+
+    /** 播放缓冲上限：设备堆内存越大缓冲越大，始终保留 48MB 给系统和播放器固定开销 */
+    private fun bufferCapBytes(): Int {
+        val maxMb = Runtime.getRuntime().maxMemory() / 1048576L
+        val cap = (maxMb - 48).coerceIn(32, 96)
+        android.util.Log.i("CastPlayer", "heap=${maxMb}MB bufferCap=${cap}MB")
+        return (cap * 1024 * 1024).toInt()
+    }
 
     private var loadErrCount = 0
 
