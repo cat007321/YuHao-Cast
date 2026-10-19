@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YuHao投屏</string>
+    <string name="waiting">等待手机投屏…</string>
+    <string name="now_playing">正在播放</string>
+    <string name="how_to">在手机上打开视频 App → 点击「TV / 投屏」图标 → 选择本设备即可投屏</string>
+    <string name="settings">设置</string>
+
+    <!-- 设置页 -->
+    <string name="settings_device_name">设备名称</string>
+    <string name="settings_device_name_hint">手机投屏时显示的设备名</string>
+    <string name="settings_save">保存</string>
+    <string name="settings_saved">已保存，约 10 秒内对手机端生效（AirPlay 需重启应用）</string>
+    <string name="settings_diagnostics">诊断信息</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_update">检查更新</string>
+    <string name="settings_update_url">更新服务器地址</string>
+    <string name="settings_update_url_hint">存放 version.json 的地址，留空则不检查更新</string>
+    <string name="settings_update_url_saved">更新服务器地址已保存</string>
+    <string name="settings_update_checking">正在检查更新…</string>
+    <string name="settings_update_latest">已是最新版本</string>
+    <string name="settings_update_no_url">未配置更新服务器地址</string>
+    <string name="settings_update_failed">检查更新失败：</string>
+    <string name="settings_update_found">发现新版本</string>
+    <string name="settings_update_download">下载更新</string>
+    <string name="settings_update_cancel">取消</string>
+
+    <!-- 前台服务通知 -->
+    <string name="channel_name">投屏服务</string>
+    <string name="channel_desc">保持 DLNA 投屏接收服务运行</string>
+</resources>
