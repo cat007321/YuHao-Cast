@@ -32,8 +32,9 @@ class CastPlayer(private val appContext: Context) {
         .setBackBuffer(15_000, false)
         .build()
 
+    private var loadErrCount = 0
+
     private val analyticsListener = object : AnalyticsListener {
-        private var loadErrCount = 0
         override fun onIsLoadingChanged(eventTime: AnalyticsListener.EventTime, isLoading: Boolean) {
             android.util.Log.d("CastPlayer", "isLoading=$isLoading buffered=${eventTime.totalBufferedDurationMs}ms")
         }
@@ -42,6 +43,17 @@ class CastPlayer(private val appContext: Context) {
             android.util.Log.w("CastPlayer", "loadError#$loadErrCount ${error.javaClass.simpleName}: ${error.message}")
             CastState.lastError = "加载失败#${loadErrCount}: ${error.javaClass.simpleName}: ${error.message?.take(200)}"
             CastState.lastErrorAt = System.currentTimeMillis()
+            // ExoPlayer 默认对加载错误无限退避重试；非媒体内容（如照片被误判为视频）
+            // 每次重试都会重新下载并占用缓冲，会把堆内存耗尽。连续失败 8 次直接停止
+            if (loadErrCount >= 8 && CastState.transportState != "STOPPED") {
+                mainHandler.post {
+                    runCatching { player.stop() }
+                    runCatching { player.clearMediaItems() }
+                    CastState.transportState = "STOPPED"
+                    CastState.notifyChanged()
+                    GenaManager.notifyAvTransport()
+                }
+            }
         }
         override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
             android.util.Log.w("CastPlayer", "droppedFrames=$droppedFrames in ${elapsedMs}ms")
@@ -185,15 +197,89 @@ class CastPlayer(private val appContext: Context) {
         val hlsUri = rtmpToHls(uri)
         if (hlsUri != null) android.util.Log.e("CastUrl", "rewritten to HLS: $hlsUri")
         val (primary, fallback) = if (hlsUri != null) hlsUri to uri else uri to null
-        playInternal(primary, title, fallback)
+        // 已确认是视频（元数据 videoItem/audioItem 或视频扩展名）→ 直接播；
+        // 非 http(s)（rtmp 改写失败等）也直接播；其余无法判断的先探测真实内容类型，
+        // 防止相册类 App 的无扩展名照片地址被当视频无限重试、把内存撑爆
+        if (isLikelyVideo(primary) || !primary.startsWith("http")) {
+            playInternal(primary, title, fallback)
+        } else {
+            sniffThenPlay(primary, title, fallback)
+        }
     }
 
-    /** 依据 DLNA 元数据（imageItem）或扩展名判断是否为图片地址 */
+    /** 探测过并确认是图片的地址缓存，避免同一地址重复探测/重复误判 */
+    private val imageUris = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private val videoExtensions = listOf(
+        ".mp4", ".m3u8", ".m3u", ".flv", ".mkv", ".rmvb", ".avi",
+        ".mov", ".mpd", ".webm", ".3gp", ".wmv", ".ts"
+    )
+
+    private fun isLikelyVideo(uri: String): Boolean {
+        // 仅信任手机真实提供的元数据；本机伪造的 videoItem 占位不作数
+        val meta = CastState.currentMeta
+        if (CastState.metaFromPhone &&
+            (meta.contains("videoItem") || meta.contains("audioItem"))
+        ) return true
+        val path = uri.substringBefore('?').substringBefore('#').lowercase()
+        return videoExtensions.any { path.endsWith(it) }
+    }
+
+    /** 依据 DLNA 元数据（imageItem）、扩展名或探测缓存判断是否为图片地址 */
     private fun isImageUri(uri: String): Boolean {
+        if (uri in imageUris) return true
         if (CastState.currentMeta.contains("imageItem")) return true
         val path = uri.substringBefore('?').substringBefore('#').lowercase()
         return path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
             path.endsWith(".gif") || path.endsWith(".webp") || path.endsWith(".bmp")
+    }
+
+    /** 后台探测地址真实内容类型：Content-Type 或文件魔数，命中图片则走图片渲染 */
+    private fun sniffThenPlay(uri: String, title: String, fallbackUri: String?) {
+        kotlin.concurrent.thread(name = "content-sniff") {
+            val sniffResult = runCatching { sniffImage(uri) }
+            val isImg = sniffResult.getOrElse {
+                android.util.Log.w("CastPlayer", "sniff error: ${it.javaClass.simpleName}: ${it.message}")
+                false
+            }
+            android.util.Log.e("CastUrl", "sniff result for $uri: isImage=$isImg")
+            if (isImg) imageUris.add(uri)
+            mainHandler.post {
+                // 探测期间手机可能已切换投别的内容：currentUri 已被改写则丢弃本次结果
+                if (CastState.currentUri.isNotEmpty() && CastState.currentUri != uri) return@post
+                if (isImg) playImage(uri, title) else playInternal(uri, title, fallbackUri)
+            }
+        }
+    }
+
+    /** 读取响应头/前 16 字节判断是否为图片（Range 请求，几乎无流量开销） */
+    private fun sniffImage(uri: String): Boolean {
+        val conn = java.net.URL(uri).openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 6_000
+        conn.readTimeout = 6_000
+        conn.instanceFollowRedirects = true
+        conn.setRequestProperty("Range", "bytes=0-15")
+        val type = conn.contentType ?: ""
+        val head = ByteArray(16)
+        var n = 0
+        conn.inputStream.use { input ->
+            n = input.read(head, 0, 16)
+        }
+        conn.disconnect()
+        if (type.startsWith("image/")) return true
+        if (n < 3) return false
+        // 注意 Byte 有符号：0xFF 的 toInt() 是 -1，必须先 and 0xFF
+        val b0 = head[0].toInt() and 0xFF
+        val b1 = head[1].toInt() and 0xFF
+        val b2 = if (n > 2) head[2].toInt() and 0xFF else 0
+        val jpeg = b0 == 0xFF && b1 == 0xD8 && b2 == 0xFF
+        val png = b0 == 0x89 && b1 == 0x50
+        val gif = n >= 6 && (String(head, 0, 6, Charsets.US_ASCII) == "GIF87a" ||
+            String(head, 0, 6, Charsets.US_ASCII) == "GIF89a")
+        val webp = n >= 12 && String(head, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+            String(head, 8, 4, Charsets.US_ASCII) == "WEBP"
+        val bmp = b0 == 0x42 && b1 == 0x4D
+        return jpeg || png || gif || webp || bmp
     }
 
     /** 图片投屏：停掉视频播放，切到图片渲染（PlaybackActivity 监听 imageEpoch 加载） */
@@ -220,6 +306,7 @@ class CastPlayer(private val appContext: Context) {
     private fun playInternal(uri: String, title: String, fallbackUri: String?) {
         mainHandler.post {
             android.util.Log.d("CastPlayer", "play() executing on main thread")
+            loadErrCount = 0
             CastState.currentUri = uri
             CastState.title = title.ifEmpty { uri.substringAfterLast('/').substringBefore('?') }
             CastState.currentIsImage = false

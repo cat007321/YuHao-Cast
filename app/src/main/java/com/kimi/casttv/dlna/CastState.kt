@@ -118,6 +118,11 @@ object CastState {
     @Volatile
     var currentIsImage: Boolean = false
 
+    /** 元数据是否来自手机（true）还是本机伪造的 videoItem 占位（false）。
+     *  判断视频/图片类型时，只有手机真实提供的元数据才可信。 */
+    @Volatile
+    var metaFromPhone: Boolean = false
+
     /** 图片代际：图片地址变化时 +1，播放界面据此重新加载 */
     @Volatile
     var imageEpoch: Int = 0

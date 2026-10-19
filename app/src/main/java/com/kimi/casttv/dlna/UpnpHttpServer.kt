@@ -174,6 +174,7 @@ class UpnpHttpServer(
                     } else {
                         player.stopIfDifferent(uri)
                         cs.currentUri = uri
+                        cs.metaFromPhone = meta.isNotEmpty()
                         cs.currentMeta = meta
                         cs.title = extractTitle(meta).ifEmpty { uri.substringAfterLast('/').substringBefore('?') }
                         cs.currentMeta = if (meta.isNotEmpty()) meta else UpnpXml.didl(cs.title, uri)

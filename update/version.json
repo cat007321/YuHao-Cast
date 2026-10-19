@@ -1,1 +1,1 @@
-{"versionCode":23,"versionName":"2.1.1","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.1/YuHaoCast-v2.1.1.apk","notes":"修复投屏内存不足导致的加载失败；启动时自动检查更新"}
+{"versionCode":24,"versionName":"2.1.2","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.2/YuHaoCast-v2.1.2.apk","notes":"修复相册投屏内存溢出：内容类型探测识别照片，限制加载失败无限重试"}
