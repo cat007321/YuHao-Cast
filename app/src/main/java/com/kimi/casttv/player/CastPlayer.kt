@@ -24,12 +24,13 @@ class CastPlayer(private val appContext: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val loadControl = DefaultLoadControl.Builder()
-        // minBuffer 15s / maxBuffer 30s：网络抖动时不频繁触发卡顿重缓冲。
-        // 注意高码率视频（手机 4K 片源 10~20Mbps）30s 约 40~75MB，
-        // 默认 48MB 堆必然 OOM；减小缓冲 + largeHeap 双保险
-        .setBufferDurationsMs(15_000, 30_000, 2_500, 5_000)
-        // 保留 15s 已播放缓冲：快进回退秒开，不用重新下载
-        .setBackBuffer(15_000, false)
+        // 关键：按字节封顶缓冲，而不是只按时间。手机 4K 片源 30~60Mbps，
+        // 按时间算 15~30s 缓冲需要 60~190MB，会把 128MB 堆打爆；
+        // 32MB 在 50Mbps 下约 5 秒，1080p 下约 30 秒，OOM 与流畅的折中
+        .setTargetBufferBytes(32 * 1024 * 1024)
+        .setBufferDurationsMs(5_000, 8_000, 2_500, 5_000)
+        // 回看缓冲缩到 5s：降低常驻内存，快进回退稍慢但稳定
+        .setBackBuffer(5_000, false)
         .build()
 
     private var loadErrCount = 0
