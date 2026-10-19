@@ -1,1 +1,1 @@
-{"versionCode":29,"versionName":"2.1.7","url":"https://ghproxy.net/https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.7/YuHaoCast-v2.1.7.apk","notes":"更新源切换到 ghproxy 实时镜像（jsDelivr 缓存故障会导致电视收不到更新），镜像轮询策略优化"}
+{"versionCode":30,"versionName":"2.1.8","url":"https://ghproxy.net/https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.8/YuHaoCast-v2.1.8.apk","notes":"播放缓冲上限放开到 256MB 并按设备内存自适应：大内存设备（如极米 H6 4GB）缓冲可达 20~40 秒，高码率大视频缓存显著减少"}
