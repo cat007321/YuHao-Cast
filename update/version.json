@@ -1,1 +1,1 @@
-{"versionCode":26,"versionName":"2.1.4","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.4/YuHaoCast-v2.1.4.apk","notes":"更新体验优化：应用内下载更新包并显示下载进度，下载完成自动调起安装"}
+{"versionCode":27,"versionName":"2.1.5","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.1.5/YuHaoCast-v2.1.5.apk","notes":"修复大体积本地视频（10~30GB 高码率）投屏反复缓冲：播放缓冲上限提高到 64MB 并加深起播缓冲，卡顿明显减少"}
