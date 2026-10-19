@@ -3,7 +3,6 @@ package com.kimi.casttv
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -130,9 +129,7 @@ object UpdateChecker {
             .setTitle(activity.getString(R.string.settings_update_found))
             .setMessage(message)
             .setPositiveButton(activity.getString(R.string.settings_update_download)) { _, _ ->
-                runCatching {
-                    activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.url)))
-                }
+                startDownload(activity, info)
             }
             .setNegativeButton(activity.getString(R.string.settings_update_cancel), null)
             .create()
@@ -141,6 +138,121 @@ object UpdateChecker {
         }
         dialog.show()
         android.util.Log.i("UpdateChecker", "update dialog shown")
+    }
+
+    /** 应用内下载更新包：带进度条弹窗，下载完成自动调起系统安装器。
+     *  GitHub Release 资产地址会 302 跳转，instanceFollowRedirects 自动跟随。 */
+    private fun startDownload(activity: Activity, info: Info) {
+        // 进度条布局（代码构建，TV 遥控器友好）
+        val content = android.widget.LinearLayout(activity).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (activity.resources.displayMetrics.density * 24).toInt()
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        val percentText = android.widget.TextView(activity).apply {
+            text = "准备下载…"
+            textSize = 16f
+        }
+        val progressBar = android.widget.ProgressBar(
+            activity, null,
+            android.R.attr.progressBarStyleHorizontal
+        ).apply {
+            max = 100
+            isIndeterminate = true
+        }
+        content.addView(percentText)
+        content.addView(progressBar)
+
+        val progressDialog = AlertDialog.Builder(activity)
+            .setTitle("正在下载 v" + info.versionName)
+            .setView(content)
+            .setNegativeButton("取消", null)
+            .create()
+        progressDialog.setOnShowListener {
+            progressDialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
+        }
+        progressDialog.show()
+
+        val mainHandler = Handler(Looper.getMainLooper())
+        thread(name = "apk-download") {
+            var outFile: java.io.File? = null
+            var errMsg = ""
+            try {
+                val conn = URL(info.url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 20_000
+                conn.instanceFollowRedirects = true
+                if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+                val total = conn.contentLengthLong
+                val dir = java.io.File(activity.cacheDir, "updates")
+                dir.mkdirs()
+                // 清掉历史更新包，避免缓存目录堆积
+                dir.listFiles()?.forEach { it.delete() }
+                outFile = java.io.File(dir, "update-v${info.versionName}.apk")
+                var downloaded = 0L
+                var lastPost = 0L
+                conn.inputStream.use { input ->
+                    java.io.FileOutputStream(outFile).use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            output.write(buf, 0, n)
+                            downloaded += n
+                            val now = System.currentTimeMillis()
+                            // 每 200ms 刷新一次进度，避免频繁刷 UI
+                            if (now - lastPost > 200 && total > 0) {
+                                lastPost = now
+                                val pct = (downloaded * 100 / total).toInt()
+                                val mbDone = downloaded / 1048576.0
+                                val mbTotal = total / 1048576.0
+                                mainHandler.post {
+                                    if (activity.isFinishing || activity.isDestroyed) return@post
+                                    progressBar.isIndeterminate = false
+                                    progressBar.progress = pct
+                                    percentText.text = String.format(
+                                        "已下载 %.1f / %.1f MB（%d%%）", mbDone, mbTotal, pct
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                conn.disconnect()
+                if (total > 0 && downloaded < total) throw java.io.IOException("下载不完整（$downloaded/$total）")
+            } catch (t: Throwable) {
+                errMsg = t.message ?: t.javaClass.simpleName
+                outFile?.delete()
+                outFile = null
+            }
+            val file = outFile
+            mainHandler.post {
+                if (activity.isFinishing || activity.isDestroyed) return@post
+                if (progressDialog.isShowing) progressDialog.dismiss()
+                if (file != null) {
+                    installApk(activity, file)
+                } else {
+                    infoDialog(activity, "下载失败：$errMsg")
+                }
+            }
+        }
+    }
+
+    /** 下载完成自动调起系统安装器（系统弹安装确认框，用户点「安装」即可） */
+    private fun installApk(activity: Activity, file: java.io.File) {
+        runCatching {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                activity, activity.packageName + ".fileprovider", file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(intent)
+        }.onFailure {
+            infoDialog(activity, "无法打开安装器：${it.message}")
+        }
     }
 
     private fun infoDialog(activity: Activity, message: String) {
