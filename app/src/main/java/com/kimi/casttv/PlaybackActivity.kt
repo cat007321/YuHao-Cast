@@ -16,6 +16,8 @@ class PlaybackActivity : android.app.Activity() {
     private var errorText: android.widget.TextView? = null
     private var urlText: android.widget.TextView? = null
     private var seekText: android.widget.TextView? = null
+    private var resolutionScroll: android.widget.HorizontalScrollView? = null
+    private var resolutionRow: android.widget.LinearLayout? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     /** 已加载到 ImageView 的图片代际（-1 = 未加载） */
@@ -26,6 +28,7 @@ class PlaybackActivity : android.app.Activity() {
     private val statusUpdater = object : Runnable {
         override fun run() {
             updateImageLayer()
+            refreshResolutionRow()
             val err = CastState.lastError
             if (err.isNotEmpty() && System.currentTimeMillis() - CastState.lastErrorAt < 60_000) {
                 errorText?.visibility = android.view.View.VISIBLE
@@ -58,6 +61,11 @@ class PlaybackActivity : android.app.Activity() {
         errorText = findViewById(R.id.errorText)
         urlText = findViewById(R.id.urlText)
         seekText = findViewById(R.id.seekText)
+        // 分辨率选择行在自定义控制条布局里，从 playerView 内部查找
+        playerView?.let { pv ->
+            resolutionScroll = pv.findViewById(R.id.resolution_scroll)
+            resolutionRow = pv.findViewById(R.id.resolution_row)
+        }
     }
 
     override fun onStart() {
@@ -178,9 +186,15 @@ class PlaybackActivity : android.app.Activity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            // 焦点在分辨率选择按钮上时，方向键/确定键交给按钮自身处理（移动焦点/选择）
+            val focusInResolution = resolutionRow?.findFocus() != null
             when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> { seekBy(-10_000); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { seekBy(10_000); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { if (!focusInResolution) { seekBy(-10_000); return true } }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { if (!focusInResolution) { seekBy(10_000); return true } }
+                // 确定键：暂停/继续（遥控器无独立暂停键）
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    if (!focusInResolution) { togglePlayPause(); return true }
+                }
                 KeyEvent.KEYCODE_BACK -> { onBackRequested(); return true }
                 KeyEvent.KEYCODE_VOLUME_UP -> {
                     CastState.volume = (CastState.volume + 5).coerceIn(0, 100)
@@ -201,6 +215,123 @@ class PlaybackActivity : android.app.Activity() {
 
     private fun applyVolume() {
         CastState.player?.volume = if (CastState.muted) 0f else CastState.volume / 100f
+    }
+
+    /** 确定键：暂停/继续切换，并同步 DLNA 状态给手机端 */
+    private fun togglePlayPause() {
+        if (CastState.currentIsImage) return
+        val p = CastState.player ?: return
+        if (p.isPlaying) {
+            p.pause()
+            CastState.transportState = "PAUSED_PLAYBACK"
+        } else {
+            p.play()
+            CastState.transportState = "PLAYING"
+        }
+        CastState.notifyChanged()
+        GenaManager.notifyAvTransport()
+    }
+
+    // ---------------- 分辨率选择 ----------------
+
+    private var resolutionEpoch = -1   // 已渲染的轨道代际
+    private var resolutionHeights = listOf<Int>()
+    private var selectedHeight = -1
+
+    /** 从 ExoPlayer 当前轨道收集可用视频分辨率（高→低去重），控制条可见时刷新按钮行 */
+    private fun refreshResolutionRow() {
+        val row = resolutionRow ?: return
+        val scroll = resolutionScroll ?: return
+        if (CastState.currentIsImage || !controllerVisible) {
+            scroll.visibility = android.view.View.GONE
+            return
+        }
+        val p = CastState.player ?: return
+        val groups = p.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
+        // 高→低去重收集高度
+        val heights = sortedSetOf<Int>(compareByDescending { it })
+        groups.forEach { g ->
+            for (i in 0 until g.length) {
+                g.getTrackFormat(i).height.takeIf { it > 0 }?.let { heights.add(it) }
+            }
+        }
+        val epoch = heights.hashCode() * 31 + groups.size
+        if (heights.size <= 1) {
+            // 单一路清（多数投屏流）：无选择必要，整行隐藏
+            scroll.visibility = android.view.View.GONE
+            resolutionEpoch = epoch
+            resolutionHeights = heights.toList()
+            return
+        }
+        if (epoch == resolutionEpoch) {
+            scroll.visibility = android.view.View.VISIBLE
+            return
+        }
+        resolutionEpoch = epoch
+        resolutionHeights = heights.toList()
+        row.removeAllViews()
+        heights.forEach { h ->
+            val btn = android.widget.Button(this).apply {
+                text = "${h}P"
+                textSize = 14f
+                setPadding(24, 8, 24, 8)
+                setOnClickListener { selectResolution(h) }
+            }
+            row.addView(btn, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = 16 })
+        }
+        // 默认：ExoPlayer 默认轨道策略即选最高清晰度，高亮它
+        selectedHeight = heights.first()
+        updateResolutionHighlight()
+        scroll.visibility = android.view.View.VISIBLE
+        android.util.Log.i("PlaybackActivity", "resolution row: ${heights.toList()} default=${selectedHeight}P")
+    }
+
+    private fun updateResolutionHighlight() {
+        val row = resolutionRow ?: return
+        for (i in 0 until row.childCount) {
+            val btn = row.getChildAt(i) as? android.widget.Button ?: continue
+            val h = btn.text.toString().removeSuffix("P").toIntOrNull() ?: continue
+            if (h == selectedHeight) {
+                btn.setTextColor(0xFF000000.toInt())
+                btn.setBackgroundColor(0xFFFFFFFF.toInt())
+            } else {
+                btn.setTextColor(0xFFFFFFFF.toInt())
+                btn.setBackgroundColor(0x66000000)
+            }
+        }
+    }
+
+    /** 选中某分辨率：对该轨道组下该高度的最高码率轨道做 override */
+    private fun selectResolution(height: Int) {
+        val p = CastState.player ?: return
+        val selector = p.trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector ?: return
+        val groups = p.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
+        var bestGroup: androidx.media3.common.Tracks.Group? = null
+        var bestIndex = -1
+        var bestBitrate = -1
+        groups.forEach { g ->
+            for (i in 0 until g.length) {
+                val f = g.getTrackFormat(i)
+                if (f.height == height && f.bitrate > bestBitrate) {
+                    bestBitrate = f.bitrate
+                    bestGroup = g
+                    bestIndex = i
+                }
+            }
+        }
+        val g = bestGroup ?: return
+        selector.setParameters(
+            selector.parameters.buildUpon()
+                .setOverrideForType(
+                    androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, listOf(bestIndex))
+                )
+        )
+        selectedHeight = height
+        updateResolutionHighlight()
+        android.util.Log.i("PlaybackActivity", "select resolution ${height}P track#$bestIndex bitrate=$bestBitrate")
     }
 
     // ---------------- 返回键分级处理 ----------------

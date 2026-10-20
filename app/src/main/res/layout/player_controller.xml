@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自定义播放控制条：media3 默认布局去掉中央 上一首/快退/暂停/快进/下一首 按钮组，
+     保留底部进度条、时间、设置入口；另加速度一行分辨率选择（代码动态填充） -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <View android:id="@id/exo_controls_background"
+      android:layout_width="0dp"
+      android:layout_height="0dp"
+      android:background="@color/exo_black_opacity_60"/>
+
+  <FrameLayout android:id="@id/exo_bottom_bar"
+      android:layout_width="match_parent"
+      android:layout_height="@dimen/exo_styled_bottom_bar_height"
+      android:layout_marginTop="@dimen/exo_styled_bottom_bar_margin_top"
+      android:layout_gravity="bottom"
+      android:background="@color/exo_bottom_bar_background"
+      android:layoutDirection="ltr">
+
+    <LinearLayout android:id="@id/exo_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingStart="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingEnd="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingLeft="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingRight="@dimen/exo_styled_bottom_bar_time_padding"
+        android:layout_gravity="center_vertical|start"
+        android:layoutDirection="ltr">
+
+      <TextView android:id="@id/exo_position"
+          style="@style/ExoStyledControls.TimeText.Position"/>
+
+      <TextView
+          style="@style/ExoStyledControls.TimeText.Separator"/>
+
+      <TextView android:id="@id/exo_duration"
+          style="@style/ExoStyledControls.TimeText.Duration"/>
+
+    </LinearLayout>
+
+    <LinearLayout android:id="@id/exo_basic_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layoutDirection="ltr">
+
+      <ImageButton android:id="@id/exo_vr"
+          style="@style/ExoStyledControls.Button.Bottom.VR"/>
+
+      <ImageButton android:id="@id/exo_shuffle"
+          style="@style/ExoStyledControls.Button.Bottom.Shuffle"/>
+
+      <ImageButton android:id="@id/exo_repeat_toggle"
+          style="@style/ExoStyledControls.Button.Bottom.RepeatToggle"/>
+
+      <ImageButton android:id="@id/exo_subtitle"
+          style="@style/ExoStyledControls.Button.Bottom.CC"/>
+
+      <ImageButton android:id="@id/exo_settings"
+          style="@style/ExoStyledControls.Button.Bottom.Settings"/>
+
+      <ImageButton android:id="@id/exo_fullscreen"
+          style="@style/ExoStyledControls.Button.Bottom.FullScreen"/>
+
+      <ImageButton android:id="@id/exo_overflow_show"
+          style="@style/ExoStyledControls.Button.Bottom.OverflowShow"/>
+
+    </LinearLayout>
+
+    <HorizontalScrollView android:id="@id/exo_extra_controls_scroll_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:visibility="invisible">
+
+      <LinearLayout android:id="@id/exo_extra_controls"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layoutDirection="ltr">
+
+        <ImageButton android:id="@id/exo_overflow_hide"
+            style="@style/ExoStyledControls.Button.Bottom.OverflowHide"/>
+
+      </LinearLayout>
+
+    </HorizontalScrollView>
+
+  </FrameLayout>
+
+  <View android:id="@id/exo_progress_placeholder"
+      android:layout_width="match_parent"
+      android:layout_height="@dimen/exo_styled_progress_layout_height"
+      android:layout_gravity="bottom"
+      android:layout_marginBottom="@dimen/exo_styled_progress_margin_bottom"/>
+
+  <!-- 分辨率选择行：位于进度条上方，代码动态填充清晰度按钮 -->
+  <HorizontalScrollView
+      android:id="@+id/resolution_scroll"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_gravity="bottom|end"
+      android:layout_marginBottom="84dp"
+      android:visibility="gone">
+
+    <LinearLayout
+        android:id="@+id/resolution_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"/>
+
+  </HorizontalScrollView>
+
+</merge>
