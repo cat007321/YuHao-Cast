@@ -327,7 +327,8 @@ class UpnpHttpServer(
                     // Sink 必须非空：哔哩哔哩发现设备后调用此动作校验渲染能力，
                     // Sink 为空会被静默过滤（爱奇艺不做该校验，故表现正常）
                     "<Source></Source><Sink>$PROTOCOLS</Sink>")
-                "GetCurrentConnectionIDs" -> ok("GetCurrentConnectionIDs", "<ConnectionIDs>0</ConnectionIDs>")
+                "GetCurrentConnectionIDs" -> ok("GetCurrentConnectionIDs",
+                    "<ConnectionIDs>${if (CastState.currentUri.isEmpty()) "" else "0"}</ConnectionIDs>")
                 "GetCurrentConnectionInfo" -> ok("GetCurrentConnectionInfo", """
     <RcsID>0</RcsID>
     <AVTransportID>0</AVTransportID>

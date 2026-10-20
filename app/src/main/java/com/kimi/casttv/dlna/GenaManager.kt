@@ -144,7 +144,7 @@ object GenaManager {
                     listOf(
                         "SourceProtocolInfo" to "",
                         "SinkProtocolInfo" to "",
-                        "CurrentConnectionIDs" to "0"
+                        "CurrentConnectionIDs" to if (cs.currentUri.isEmpty()) "" else "0"
                     )
                 )
             }
