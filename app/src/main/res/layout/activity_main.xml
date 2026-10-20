@@ -59,17 +59,9 @@
                 android:padding="18dp">
 
                 <TextView
-                    android:id="@+id/deviceNameText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp" />
-
-                <TextView
                     android:id="@+id/ipText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:textColor="@color/text_secondary"
                     android:textSize="16sp" />
             </LinearLayout>
@@ -82,14 +74,15 @@
                 android:text="@string/how_to"
                 android:textColor="@color/text_secondary"
                 android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/versionText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="28dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
     </FrameLayout>
 </ScrollView>
