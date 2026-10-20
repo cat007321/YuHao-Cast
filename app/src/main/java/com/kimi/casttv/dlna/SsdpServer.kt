@@ -41,6 +41,11 @@ class SsdpServer {
     @Volatile
     private var lastPacketAt: Long = 0L
 
+    /** 最近一次从外部设备学到"手机所在网段"的时间；超过 120s 未刷新则过期，
+     *  恢复为全网卡宣告，避免学到错误网卡后永久锁定、手机再也搜不到（v2.2.3） */
+    @Volatile
+    private var lastLearnedAt: Long = 0L
+
     private val notifyTypes: List<Pair<String, String>>
         get() {
             val udn = CastState.udn
@@ -177,7 +182,10 @@ class SsdpServer {
         // 电视自身系统服务（如聚好看）可能从虚拟网卡发搜索，
         // 若由它决定宣告网卡，上线 NOTIFY 会全部发到虚拟网卡网段，手机端永远收不到
         val isSelf = CastState.allIps.contains(target.address.hostAddress)
-        if (!isSelf) CastState.localIp = lanIp
+        if (!isSelf) {
+            CastState.localIp = lanIp
+            lastLearnedAt = System.currentTimeMillis()
+        }
         val msg = buildString {
             append("HTTP/1.1 200 OK\r\n")
             append("CACHE-CONTROL: max-age=$MAX_AGE\r\n")
@@ -238,7 +246,10 @@ class SsdpServer {
         val groupAddr = InetSocketAddress(InetAddress.getByName(SSDP_HOST), SSDP_PORT)
         val httpPort = CastState.httpPort
         val serverStr = UpnpXml.serverString()
-        val learnedIp = if (CastState.ssdpMsearchCount > 0) CastState.localIp else ""
+        val learnedIp =
+            if (CastState.ssdpMsearchCount > 0 &&
+                System.currentTimeMillis() - lastLearnedAt < 120_000
+            ) CastState.localIp else ""
         for (ni in multicastInterfaces()) {
             val ips = ipsOn(ni)
             if (ips.isEmpty()) continue

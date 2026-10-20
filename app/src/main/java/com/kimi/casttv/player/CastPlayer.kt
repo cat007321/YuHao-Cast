@@ -46,6 +46,45 @@ class CastPlayer(private val appContext: Context) {
 
     private var loadErrCount = 0
 
+    /**
+     * 停止后延迟回归"完全空闲"（NO_MEDIA_PRESENT + 清空 URI）。
+     * 部分手机图库/视频 App 会把"停止但仍挂着媒体"的渲染端标记为占用中并隐藏设备，
+     * 表现为"投屏过一次后搜不到"；回归空闲后这些 App 会重新显示本设备。
+     * 延迟 30 秒：给手机端"停止后再续播"（Stop→Play 复用 URI）留出窗口，期间
+     * 任何新的投屏/恢复播放都会取消本次回归。
+     */
+    private var idleResetRunnable: Runnable? = null
+
+    private fun cancelIdleReset() {
+        idleResetRunnable?.let { mainHandler.removeCallbacks(it) }
+        idleResetRunnable = null
+    }
+
+    private fun scheduleIdleReset() {
+        cancelIdleReset()
+        val r = Runnable {
+            idleResetRunnable = null
+            val idle = CastState.transportState == "STOPPED" ||
+                CastState.transportState == "NO_MEDIA_PRESENT"
+            if (idle && CastState.currentUri.isNotEmpty()) {
+                android.util.Log.i("CastPlayer", "idle reset: returning to NO_MEDIA_PRESENT")
+                CastState.currentUri = ""
+                CastState.currentMeta = ""
+                CastState.nextUri = ""
+                CastState.title = ""
+                CastState.durationMs = -1L
+                CastState.positionMs = 0L
+                CastState.currentIsImage = false
+                CastState.transportState = "NO_MEDIA_PRESENT"
+                CastState.notifyChanged()
+                GenaManager.notifyAvTransport()
+                GenaManager.notifyConnectionManager()
+            }
+        }
+        idleResetRunnable = r
+        mainHandler.postDelayed(r, 30_000)
+    }
+
     private val analyticsListener = object : AnalyticsListener {
         override fun onIsLoadingChanged(eventTime: AnalyticsListener.EventTime, isLoading: Boolean) {
             android.util.Log.d("CastPlayer", "isLoading=$isLoading buffered=${eventTime.totalBufferedDurationMs}ms")
@@ -64,6 +103,7 @@ class CastPlayer(private val appContext: Context) {
                     CastState.transportState = "STOPPED"
                     CastState.notifyChanged()
                     GenaManager.notifyAvTransport()
+                    scheduleIdleReset()
                 }
             }
         }
@@ -108,6 +148,7 @@ class CastPlayer(private val appContext: Context) {
                             CastState.transportState = "STOPPED"
                             CastState.notifyChanged()
                             GenaManager.notifyAvTransport()
+                            scheduleIdleReset()
                         }
                     }
                     Player.STATE_IDLE -> Unit
@@ -138,6 +179,7 @@ class CastPlayer(private val appContext: Context) {
                 CastState.transportState = "STOPPED"
                 CastState.notifyChanged()
                 GenaManager.notifyAvTransport()
+                scheduleIdleReset()
             }
         })
     }
@@ -298,6 +340,7 @@ class CastPlayer(private val appContext: Context) {
     private fun playImage(uri: String, title: String) {
         mainHandler.post {
             android.util.Log.d("CastPlayer", "playImage() $uri")
+            cancelIdleReset()
             runCatching { player.stop() }
             runCatching { player.clearMediaItems() }
             CastState.currentUri = uri
@@ -318,6 +361,7 @@ class CastPlayer(private val appContext: Context) {
     private fun playInternal(uri: String, title: String, fallbackUri: String?) {
         mainHandler.post {
             android.util.Log.d("CastPlayer", "play() executing on main thread")
+            cancelIdleReset()
             loadErrCount = 0
             CastState.currentUri = uri
             CastState.title = title.ifEmpty { uri.substringAfterLast('/').substringBefore('?') }
@@ -376,11 +420,13 @@ class CastPlayer(private val appContext: Context) {
             CastState.durationMs = -1L
             CastState.notifyChanged()
             GenaManager.notifyAvTransport()
+            scheduleIdleReset()
         }
     }
 
     fun resume() {
         mainHandler.post {
+            cancelIdleReset()
             if (CastState.currentIsImage) {
                 CastState.transportState = "PLAYING"
                 CastState.notifyChanged()

@@ -1,1 +1,1 @@
-{"versionCode":34,"versionName":"2.2.2","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.2/YuHaoCast-v2.2.2.apk","notes":"主界面细节调整——设备卡片去掉设备名和端口号只保留 IP，版本号固定显示在屏幕底部"}
+{"versionCode":36,"versionName":"2.2.3","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.3/YuHaoCast-v2.2.3.apk","notes":"主界面去除中文标题仅保留 YUHAO CAST，恢复以投屏状态和IP为视觉中心的居中布局；新增开机自启动，投影开机即可被搜索到；修复本地投屏一次后设备搜索不到的问题（停止后30秒自动回归空闲态，宣告网卡120秒无搜索自动恢复）"}

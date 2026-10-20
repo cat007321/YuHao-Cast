@@ -384,13 +384,18 @@ class PlaybackActivity : android.app.Activity() {
             p.clearMediaItems()
         }
         CastState.currentUri = ""
+        CastState.currentMeta = ""
+        CastState.nextUri = ""
         CastState.title = ""
         CastState.currentIsImage = false
         CastState.imageEpoch++
-        CastState.transportState = "STOPPED"
+        // 回归完全空闲：手机端不会把本设备标记为"占用中"
+        CastState.transportState = "NO_MEDIA_PRESENT"
         CastState.durationMs = -1L
+        CastState.positionMs = 0L
         CastState.notifyChanged()
         com.kimi.casttv.dlna.GenaManager.notifyAvTransport()
+        com.kimi.casttv.dlna.GenaManager.notifyConnectionManager()
         finish()
     }
 
