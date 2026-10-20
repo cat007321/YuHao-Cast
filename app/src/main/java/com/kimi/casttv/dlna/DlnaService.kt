@@ -28,6 +28,8 @@ class DlnaService : Service() {
     companion object {
         const val CHANNEL_ID = "cast_service"
         const val NOTIFICATION_ID = 1
+        const val CHANNEL_ALERT_ID = "cast_alert"
+        const val NOTIFICATION_ALERT_ID = 2
         const val PREFS = "cast_tv_prefs"
         const val KEY_UDN = "udn"
         const val KEY_UDN_VERSION = "udn_version"
@@ -38,6 +40,10 @@ class DlnaService : Service() {
         @Volatile
         var running = false
             private set
+
+        /** 运行中的服务实例，供播放器回调"投屏已开始"时发全屏意图通知（v2.2.5） */
+        @Volatile
+        var instance: DlnaService? = null
     }
 
     private lateinit var castPlayer: CastPlayer
@@ -61,6 +67,7 @@ class DlnaService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
+        instance = this
 
         // 设备身份：UDN 按版本重新生成——手机 App（如哔哩哔哩）会缓存设备 UDN，
         // 旧版本 UDN 若曾关联过不可达地址，可能被长期标记为不可用而不再展示；
@@ -165,6 +172,7 @@ class DlnaService : Service() {
 
     override fun onDestroy() {
         running = false
+        instance = null
         handler.removeCallbacks(progressReporter)
         runCatching { ssdp.sendByeBye() }
         ssdp.stop()
@@ -205,4 +213,47 @@ class DlnaService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         else 0
+
+    /**
+     * 投屏开始时的兜底拉起（v2.2.5）：Android 14（API 34）起，应用退到后台后
+     * 服务直接 startActivity 会被系统拦截（Background activity launch blocked），
+     * 表现为"有声音没画面、黑屏无报错"。走全屏意图通知是系统认可的后台拉起
+     * 通道（前台服务的媒体播放场景 + USE_FULL_SCREEN_INTENT 权限）。
+     */
+    fun onCastStarted() {
+        if (CastState.visibleActivityCount > 0) return
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ALERT_ID, "投屏播放", NotificationManager.IMPORTANCE_HIGH)
+        )
+        val intent = Intent(this, com.kimi.casttv.PlaybackActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pi = buildCastPendingIntent(intent)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ALERT_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(CastState.title.ifEmpty { getString(R.string.now_playing) })
+            .setContentText("投屏已开始，点击进入播放画面")
+            .setContentIntent(pi)
+            .setFullScreenIntent(pi, true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(20_000)
+            .build()
+        runCatching { nm.notify(NOTIFICATION_ALERT_ID, notification) }
+            .onFailure { android.util.Log.e("DlnaService", "cast alert notify failed", it) }
+    }
+
+    /** API 34+ 需显式允许 PendingIntent 在后台启动 Activity */
+    private fun buildCastPendingIntent(intent: Intent): PendingIntent {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return if (Build.VERSION.SDK_INT >= 34) {
+            val opts = android.app.ActivityOptions.makeBasic()
+                .setPendingIntentBackgroundActivityStartMode(
+                    android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                )
+            PendingIntent.getActivity(this, 1, intent, flags, opts.toBundle())
+        } else {
+            PendingIntent.getActivity(this, 1, intent, flags)
+        }
+    }
 }

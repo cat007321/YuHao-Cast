@@ -127,6 +127,12 @@ object CastState {
     @Volatile
     var imageEpoch: Int = 0
 
+    /** 应用可见窗口计数（MainActivity/PlaybackActivity 的 onStart/onStop 维护，成对增减）。
+     *  用于投屏开始时判断应用是否有可见窗口：为 0 时 startActivity 会被 Android 14
+     *  的后台拉起限制拦截，需要发全屏意图通知兜底 */
+    @Volatile
+    var visibleActivityCount: Int = 0
+
     /** 状态变化监听（主线程通知 UI / 事件订阅） */
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 

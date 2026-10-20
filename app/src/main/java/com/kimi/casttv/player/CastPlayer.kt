@@ -17,6 +17,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.kimi.casttv.PlaybackActivity
 import com.kimi.casttv.dlna.CastState
+import com.kimi.casttv.dlna.DlnaService
 import com.kimi.casttv.dlna.GenaManager
 
 /**
@@ -409,6 +410,7 @@ class CastPlayer(private val appContext: Context) {
             CastState.notifyChanged()
             GenaManager.notifyAvTransport()
             openPlaybackScreen()
+            DlnaService.instance?.onCastStarted()
         }
     }
 
@@ -433,6 +435,7 @@ class CastPlayer(private val appContext: Context) {
             player.playWhenReady = true
             applyVolume()
             openPlaybackScreen()
+            DlnaService.instance?.onCastStarted()
         }
     }
 

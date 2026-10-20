@@ -50,6 +50,21 @@ class MainActivity : android.app.Activity() {
         UpdateChecker.maybeAutoCheck(this)
     }
 
+    override fun onStart() {
+        super.onStart()
+        CastState.visibleActivityCount++
+        // 应用已回到前台，撤掉可能挂着的"投屏已开始"通知
+        runCatching {
+            (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                .cancel(DlnaService.NOTIFICATION_ALERT_ID)
+        }
+    }
+
+    override fun onStop() {
+        CastState.visibleActivityCount--
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         handler.post(uiUpdater)

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.media3.ui.PlayerView
 import com.kimi.casttv.dlna.CastState
+import com.kimi.casttv.dlna.DlnaService
 import com.kimi.casttv.dlna.GenaManager
 
 /**
@@ -100,12 +101,20 @@ class PlaybackActivity : android.app.Activity() {
 
     override fun onStart() {
         super.onStart()
+        CastState.visibleActivityCount++
+        // 播放界面已打开，撤掉"投屏已开始"的全屏意图通知
+        runCatching {
+            getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                .let { it as android.app.NotificationManager }
+                .cancel(DlnaService.NOTIFICATION_ALERT_ID)
+        }
         playerView?.player = if (CastState.currentIsImage) null else CastState.player
         applyVolume()
         uiHandler.post(statusUpdater)
     }
 
     override fun onStop() {
+        CastState.visibleActivityCount--
         uiHandler.removeCallbacks(statusUpdater)
         playerView?.player = null
         super.onStop()

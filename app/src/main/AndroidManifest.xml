@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 开机自启动：投影重启后自动运行投屏服务 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 投屏开始时从后台服务拉起播放界面（全屏意图，TV 设备默认授予） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- TV 设备声明 -->
     <uses-feature
