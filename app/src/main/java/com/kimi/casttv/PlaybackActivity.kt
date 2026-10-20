@@ -16,6 +16,7 @@ class PlaybackActivity : android.app.Activity() {
     private var errorText: android.widget.TextView? = null
     private var urlText: android.widget.TextView? = null
     private var seekText: android.widget.TextView? = null
+    private var exitHintText: android.widget.TextView? = null
     private var resolutionScroll: android.widget.HorizontalScrollView? = null
     private var resolutionRow: android.widget.LinearLayout? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -61,6 +62,7 @@ class PlaybackActivity : android.app.Activity() {
         errorText = findViewById(R.id.errorText)
         urlText = findViewById(R.id.urlText)
         seekText = findViewById(R.id.seekText)
+        exitHintText = findViewById(R.id.exitHintText)
         // 分辨率选择行在自定义控制条布局里，从 playerView 内部查找
         playerView?.let { pv ->
             resolutionScroll = pv.findViewById(R.id.resolution_scroll)
@@ -336,19 +338,19 @@ class PlaybackActivity : android.app.Activity() {
 
     // ---------------- 返回键分级处理 ----------------
 
-    private var exitDialog: android.app.AlertDialog? = null
-
     /** 播放控制条当前是否可见（由 ControllerVisibilityListener 维护） */
     @Volatile
     private var controllerVisible = false
 
+    private var exitHintShownAt = 0L
+    private var exitHintRunnable: Runnable? = null
+
     /**
      * 返回键分级：
      * 1. 屏显信息（快进提示 / 播放控制条）可见时 → 先关掉屏显，不退出
-     * 2. 无屏显时 → 弹"是否退出投屏"确认框，确认才真正退出
+     * 2. 无屏显时 → 视频下方提示"再按一次返回键退出投屏"，2.5 秒内再按一次才真正退出
      */
     private fun onBackRequested() {
-        exitDialog?.let { if (it.isShowing) { it.dismiss(); return } }
         if (seekText?.visibility == android.view.View.VISIBLE) {
             hideSeekOverlay()
             return
@@ -357,24 +359,22 @@ class PlaybackActivity : android.app.Activity() {
             playerView?.hideController()
             return
         }
-        showExitDialog()
+        val now = System.currentTimeMillis()
+        if (now - exitHintShownAt < 2500) {
+            hideExitHint()
+            doExit()
+            return
+        }
+        exitHintShownAt = now
+        exitHintText?.visibility = android.view.View.VISIBLE
+        exitHintRunnable?.let { uiHandler.removeCallbacks(it) }
+        exitHintRunnable = Runnable { hideExitHint() }.also { uiHandler.postDelayed(it, 2500) }
     }
 
-    private fun showExitDialog() {
-        exitDialog = android.app.AlertDialog.Builder(this)
-            .setTitle("退出投屏")
-            .setMessage("是否退出当前投屏？")
-            .setPositiveButton("退出投屏") { _, _ -> doExit() }
-            .setNegativeButton("取消", null)
-            .setOnCancelListener { exitDialog = null }
-            .create()
-            .also { d ->
-                // 电视上按钮默认无焦点，弹窗布局完成后聚焦"退出投屏"，遥控器 OK 键直接确认
-                d.setOnShowListener {
-                    d.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.requestFocus()
-                }
-                d.show()
-            }
+    private fun hideExitHint() {
+        exitHintRunnable?.let { uiHandler.removeCallbacks(it) }
+        exitHintRunnable = null
+        exitHintText?.visibility = android.view.View.GONE
     }
 
     /** 退出投屏：停止播放并回到主界面 */

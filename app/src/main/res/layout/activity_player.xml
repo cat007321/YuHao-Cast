@@ -33,6 +33,20 @@
         android:visibility="gone" />
 
     <TextView
+        android:id="@+id/exitHintText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="72dp"
+        android:background="#AA000000"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="再按一次返回键退出投屏"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/errorText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
