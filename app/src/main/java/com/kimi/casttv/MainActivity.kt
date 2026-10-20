@@ -19,6 +19,7 @@ class MainActivity : android.app.Activity() {
     private lateinit var deviceNameText: TextView
     private lateinit var ipText: TextView
     private lateinit var statusText: TextView
+    private lateinit var versionText: TextView
 
     private val uiUpdater = object : Runnable {
         override fun run() {
@@ -42,6 +43,9 @@ class MainActivity : android.app.Activity() {
         deviceNameText = findViewById(R.id.deviceNameText)
         ipText = findViewById(R.id.ipText)
         statusText = findViewById(R.id.statusText)
+        versionText = findViewById(R.id.versionText)
+        // 主界面下方显示当前版本号
+        versionText.text = "v" + UpdateChecker.currentVersionName(this)
 
         // 启动投屏服务
         ContextCompat.startForegroundService(this, Intent(this, DlnaService::class.java))
