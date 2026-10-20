@@ -1,1 +1,1 @@
-{"versionCode":33,"versionName":"2.2.1","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.1/YuHaoCast-v2.2.1.apk","notes":"返回键双击退出投屏——无屏显时按返回在视频下方提示，再按一次才退出，不再弹确认框；主界面整体居中，标题改为 YUHAO CAST 副标 + YuHao投屏 组合，下方显示当前版本号"}
+{"versionCode":34,"versionName":"2.2.2","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.2/YuHaoCast-v2.2.2.apk","notes":"主界面细节调整——设备卡片去掉设备名和端口号只保留 IP，版本号固定显示在屏幕底部"}

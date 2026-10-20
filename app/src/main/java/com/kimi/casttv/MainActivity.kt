@@ -16,16 +16,13 @@ import com.kimi.casttv.dlna.DlnaService
 class MainActivity : android.app.Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var deviceNameText: TextView
     private lateinit var ipText: TextView
     private lateinit var statusText: TextView
     private lateinit var versionText: TextView
 
     private val uiUpdater = object : Runnable {
         override fun run() {
-            deviceNameText.text = CastState.friendlyName
-            ipText.text = if (CastState.localIp.isEmpty()) "未连接网络"
-            else "IP：${CastState.localIp}:${CastState.httpPort}"
+            ipText.text = if (CastState.localIp.isEmpty()) "未连接网络" else CastState.localIp
             statusText.text = when (CastState.transportState) {
                 "PLAYING" -> "正在播放：${CastState.title}"
                 "PAUSED_PLAYBACK" -> "已暂停：${CastState.title}"
@@ -40,7 +37,6 @@ class MainActivity : android.app.Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        deviceNameText = findViewById(R.id.deviceNameText)
         ipText = findViewById(R.id.ipText)
         statusText = findViewById(R.id.statusText)
         versionText = findViewById(R.id.versionText)
