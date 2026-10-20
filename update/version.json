@@ -1,1 +1,1 @@
-{"versionCode":36,"versionName":"2.2.3","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.3/YuHaoCast-v2.2.3.apk","notes":"主界面去除中文标题仅保留 YUHAO CAST，恢复以投屏状态和IP为视觉中心的居中布局；新增开机自启动，投影开机即可被搜索到；修复本地投屏一次后设备搜索不到的问题（停止后30秒自动回归空闲态，宣告网卡120秒无搜索自动恢复）"}
+{"versionCode":37,"versionName":"2.2.4","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.4/YuHaoCast-v2.2.4.apk","notes":"修复高规格视频（4K杜比视界60帧等）投屏无画面无反馈：播放界面新增大号缓冲提示（等待时长+超时可跳建议）；加载更耐心（连接超时20秒读取45秒，网络重试放宽至10次）；解码失败显示可读原因与视频规格；新增解码器与格式诊断日志；错误提示显示延长至120秒"}

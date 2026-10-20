@@ -7,10 +7,14 @@ import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.kimi.casttv.PlaybackActivity
 import com.kimi.casttv.dlna.CastState
 import com.kimi.casttv.dlna.GenaManager
@@ -95,8 +99,10 @@ class CastPlayer(private val appContext: Context) {
             CastState.lastError = "加载失败#${loadErrCount}: ${error.javaClass.simpleName}: ${error.message?.take(200)}"
             CastState.lastErrorAt = System.currentTimeMillis()
             // ExoPlayer 默认对加载错误无限退避重试；非媒体内容（如照片被误判为视频）
-            // 每次重试都会重新下载并占用缓冲，会把堆内存耗尽。连续失败 8 次直接停止
-            if (loadErrCount >= 8 && CastState.transportState != "STOPPED") {
+            // 每次重试都会重新下载并占用缓冲，会把堆内存耗尽。加载重试策略放宽到
+            // 10 次后，这里把兜底阈值抬到 12：正常起播/卡顿交给重试策略处理，
+            // 只有真正恶性的持续失败（如地址不可达的死循环）才强制停止
+            if (loadErrCount >= 12 && CastState.transportState != "STOPPED") {
                 mainHandler.post {
                     runCatching { player.stop() }
                     runCatching { player.clearMediaItems() }
@@ -117,6 +123,21 @@ class CastPlayer(private val appContext: Context) {
 
     val player: ExoPlayer = ExoPlayer.Builder(appContext)
         .setLoadControl(loadControl)
+        // 投屏视频源是手机/电脑上的临时 HTTP 服务器：连接和首包可能很慢，
+        // 默认 8 秒超时对高码率大文件（4K 杜比视界 10~30GB）起播太短
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(appContext).setDataSourceFactory(
+                DefaultDataSource.Factory(
+                    appContext,
+                    DefaultHttpDataSource.Factory()
+                        .setConnectTimeoutMs(20_000)
+                        .setReadTimeoutMs(45_000)
+                        .setAllowCrossProtocolRedirects(true)
+                )
+            )
+                // 网络抖动时更耐心：默认策略重试 3~4 次即失败，投屏场景放宽到 10 次指数退避
+                .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy(10) {})
+        )
         .build()
         .also {
         it.setSeekParameters(SeekParameters.CLOSEST_SYNC)
@@ -154,6 +175,7 @@ class CastPlayer(private val appContext: Context) {
                     Player.STATE_IDLE -> Unit
                     Player.STATE_READY -> {
                         CastState.durationMs = if (it.duration > 0) it.duration else -1L
+                        logVideoFormat("READY")
                         if (!it.playWhenReady && CastState.transportState == "PLAYING") {
                             CastState.transportState = "PAUSED_PLAYBACK"
                             CastState.notifyChanged()
@@ -165,6 +187,7 @@ class CastPlayer(private val appContext: Context) {
 
             override fun onPlayerError(error: PlaybackException) {
                 android.util.Log.e("CastPlayer", "onPlayerError ${error.errorCodeName}: ${error.message}")
+                logVideoFormat("ERROR")
                 // HLS 改写地址失败时，回退到原始地址（仅一次）
                 val fb = CastState.fallbackUri
                 if (fb.isNotEmpty()) {
@@ -184,10 +207,41 @@ class CastPlayer(private val appContext: Context) {
         })
     }
 
+    /** 记录当前视频流规格（诊断高规格视频无画面/失败的关键信息；解码器名由
+     *  AnalyticsListener.onVideoDecoderInitialized 单独记录） */
+    private fun logVideoFormat(tag: String) {
+        runCatching {
+            val f = player.videoFormat
+            android.util.Log.e(
+                "CastPlayer",
+                "$tag videoFormat codecs=${f?.codecs} ${f?.width}x${f?.height}@${"%.1f".format(f?.frameRate ?: 0f)}fps " +
+                    "colorInfo=${f?.colorInfo}"
+            )
+        }
+    }
+
     /** 把 ExoPlayer 错误码翻译成用户看得懂的原因 */
     private fun friendlyError(error: PlaybackException): String {
         val uri = CastState.currentUri
         val raw = "${error.errorCodeName}: ${error.message?.take(200)}"
+        // 设备解码能力不支持（典型：4K/杜比视界/高帧率超出设备硬件解码范围）
+        if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED
+        ) {
+            val fmt = runCatching {
+                val f = player.videoFormat
+                if (f != null) "（${f.codecs ?: "?"} ${f.width}x${f.height} ${"%.0f".format(f.frameRate)}fps）" else ""
+            }.getOrDefault("")
+            return "设备无法解码此视频$fmt：规格可能超出本机支持（常见于 4K / 杜比视界 / 60 帧 HEVC）。可尝试在手机投屏时选择更低清晰度，或转换为普通 HDR/SDR 视频后再投"
+        }
+        // 连不上视频源（手机/电脑的临时 HTTP 服务）
+        if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        ) {
+            return "无法连接投屏视频源：请确认手机与本设备在同一 Wi-Fi，投屏不要退出手机上的投屏界面，然后重新投屏一次"
+        }
         // 优酷对受版权/DRM 保护的视频会返回"空播放列表"（无分片的合法 m3u8），
         // ExoPlayer 报 PARSING_CONTAINER_UNSUPPORTED
         if ((error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||

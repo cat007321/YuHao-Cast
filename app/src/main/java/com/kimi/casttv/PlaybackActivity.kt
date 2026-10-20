@@ -17,9 +17,13 @@ class PlaybackActivity : android.app.Activity() {
     private var urlText: android.widget.TextView? = null
     private var seekText: android.widget.TextView? = null
     private var exitHintText: android.widget.TextView? = null
+    private var bufferHintText: android.widget.TextView? = null
     private var resolutionScroll: android.widget.HorizontalScrollView? = null
     private var resolutionRow: android.widget.LinearLayout? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** 进入缓冲（TRANSITIONING）的时刻，用于缓冲提示计时；0 = 非缓冲中 */
+    private var bufferingSince = 0L
 
     /** 已加载到 ImageView 的图片代际（-1 = 未加载） */
     @Volatile
@@ -31,7 +35,7 @@ class PlaybackActivity : android.app.Activity() {
             updateImageLayer()
             refreshResolutionRow()
             val err = CastState.lastError
-            if (err.isNotEmpty() && System.currentTimeMillis() - CastState.lastErrorAt < 60_000) {
+            if (err.isNotEmpty() && System.currentTimeMillis() - CastState.lastErrorAt < 120_000) {
                 errorText?.visibility = android.view.View.VISIBLE
                 errorText?.text = "播放出错：$err"
             } else {
@@ -44,7 +48,30 @@ class PlaybackActivity : android.app.Activity() {
             } else {
                 urlText?.visibility = android.view.View.GONE
             }
+            updateBufferHint()
             uiHandler.postDelayed(this, 1000)
+        }
+    }
+
+    /**
+     * 缓冲提示：TRANSITIONING（正在读取/缓冲）期间在屏幕中央显示大字号等待信息。
+     * 解决"高规格视频（4K 杜比视界/高帧率）加载慢或设备不支持"时黑屏无反馈、
+     * 用户无法区分"在加载"还是"出故障"的问题。
+     */
+    private fun updateBufferHint() {
+        val buffering = CastState.transportState == "TRANSITIONING" && !CastState.currentIsImage
+        if (buffering) {
+            if (bufferingSince == 0L) bufferingSince = System.currentTimeMillis()
+            val waitedSec = (System.currentTimeMillis() - bufferingSince) / 1000
+            bufferHintText?.visibility = android.view.View.VISIBLE
+            bufferHintText?.text = if (waitedSec >= 15) {
+                "正在缓冲…（已等待 ${waitedSec} 秒）\n该视频规格较高（4K/杜比视界/高帧率），加载可能较慢；\n若超过 2 分钟仍无画面，可能是设备不支持此格式，请在手机端选择更低清晰度投屏"
+            } else {
+                "正在缓冲…（${waitedSec} 秒）"
+            }
+        } else {
+            bufferingSince = 0L
+            bufferHintText?.visibility = android.view.View.GONE
         }
     }
 
@@ -63,6 +90,7 @@ class PlaybackActivity : android.app.Activity() {
         urlText = findViewById(R.id.urlText)
         seekText = findViewById(R.id.seekText)
         exitHintText = findViewById(R.id.exitHintText)
+        bufferHintText = findViewById(R.id.bufferHintText)
         // 分辨率选择行在自定义控制条布局里，从 playerView 内部查找
         playerView?.let { pv ->
             resolutionScroll = pv.findViewById(R.id.resolution_scroll)
