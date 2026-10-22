@@ -27,6 +27,12 @@ import com.kimi.casttv.dlna.GenaManager
  */
 class CastPlayer(private val appContext: Context) {
 
+    companion object {
+        /** 视频请求伪装 UA：安卓 Chrome 浏览器（部分源站 CDN 按 UA 风控） */
+        private const val VIDEO_UA =
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val loadControl = DefaultLoadControl.Builder()
@@ -143,6 +149,10 @@ class CastPlayer(private val appContext: Context) {
                         .setConnectTimeoutMs(20_000)
                         .setReadTimeoutMs(45_000)
                         .setAllowCrossProtocolRedirects(true)
+                        // 部分视频源 CDN 按 UA 风控（非浏览器 UA 直接 403/返回空内容），
+                        // 伪装成安卓 Chrome 浏览器请求（当贝投屏等商用软件同样做法）
+                        .setUserAgent(VIDEO_UA)
+                        .setDefaultRequestProperties(mapOf("Referer" to "http://www.aarray.cn/"))
                 )
             )
                 // 网络抖动时更耐心：默认策略重试 3~4 次即失败，投屏场景放宽到 10 次指数退避
