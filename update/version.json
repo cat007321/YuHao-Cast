@@ -1,1 +1,1 @@
-{"versionCode":38,"versionName":"2.2.5","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.5/YuHaoCast-v2.2.5.apk","notes":"修复投屏开始时播放界面被系统拦截导致的有声音无画面（Android 14 后台拉起限制，改用全屏意图通知拉起播放界面）"}
+{"versionCode":39,"versionName":"2.2.6","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.6/YuHaoCast-v2.2.6.apk","notes":"播放失败时的错误提示更友好：识别视频源防盗链校验拒绝（403）和播放列表无效，给出可操作的解决建议"}

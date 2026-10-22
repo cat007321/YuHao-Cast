@@ -9,6 +9,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
@@ -97,7 +98,15 @@ class CastPlayer(private val appContext: Context) {
         override fun onLoadError(eventTime: AnalyticsListener.EventTime, loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData, error: java.io.IOException, wasCanceled: Boolean) {
             loadErrCount++
             android.util.Log.w("CastPlayer", "loadError#$loadErrCount ${error.javaClass.simpleName}: ${error.message}")
-            CastState.lastError = "加载失败#${loadErrCount}: ${error.javaClass.simpleName}: ${error.message?.take(200)}"
+            val msg = error.message ?: ""
+            CastState.lastError = when {
+                // 源站 CDN 按会话/设备校验（换 UA、换网络都 403），电视端无法伪造，只能提示换源重投
+                msg.contains("Response code: 403") || msg.contains("Response code: 401") ->
+                    "视频源拒绝了播放请求（403）：该来源做了防盗链授权校验，电视端无法直接访问，请在手机 App 内切换播放源/线路后重新投屏"
+                msg.contains("Response code: 404") ->
+                    "视频地址已失效（404）：请在手机端重新发起投屏"
+                else -> "加载失败#${loadErrCount}: ${error.javaClass.simpleName}: ${msg.take(200)}"
+            }
             CastState.lastErrorAt = System.currentTimeMillis()
             // ExoPlayer 默认对加载错误无限退避重试；非媒体内容（如照片被误判为视频）
             // 每次重试都会重新下载并占用缓冲，会把堆内存耗尽。加载重试策略放宽到
@@ -225,6 +234,22 @@ class CastPlayer(private val appContext: Context) {
     private fun friendlyError(error: PlaybackException): String {
         val uri = CastState.currentUri
         val raw = "${error.errorCodeName}: ${error.message?.take(200)}"
+        // 源站 CDN 会话校验拒绝（看球直播等：token 绑定 App 会话/设备，电视端
+        // 或其他设备直接访问一律 403，换 UA/换网络都无效），遍历 cause 链找响应码
+        var cause: Throwable? = error
+        var respCode = -1
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) {
+                respCode = cause.responseCode
+                break
+            }
+            cause = cause.cause
+        }
+        if (respCode == 403 || respCode == 401 ||
+            (error.message ?: "").contains("Response code: 403")
+        ) {
+            return "视频源拒绝了播放请求（403）：该来源做了防盗链/授权校验，电视端无法直接访问，请在手机 App 内切换播放源/线路后重新投屏"
+        }
         // 设备解码能力不支持（典型：4K/杜比视界/高帧率超出设备硬件解码范围）
         if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
             error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ||
@@ -251,10 +276,13 @@ class CastPlayer(private val appContext: Context) {
         ) {
             return "优酷未提供可播放的投屏地址（该视频可能受版权/DRM 限制，或投屏链接已过期），请重新投屏或换个普通视频试试"
         }
-        if (error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED &&
+        // m3u8 播放列表解析失败：优酷特判之外，常见原因是源站防盗链校验
+        // （对非 App 请求返回 200 错误页/空内容，如看球直播）或链接过期
+        if ((error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+                error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED) &&
             uri.contains(".m3u8")
         ) {
-            return "播放列表无效或已过期，请在手机上重新投屏一次"
+            return "源站未返回有效的播放列表：该来源可能做了防盗链校验（电视端无法直接访问），或链接已过期。请在手机 App 内切换播放源/线路后重新投屏"
         }
         return raw
     }
