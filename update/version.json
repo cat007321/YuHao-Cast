@@ -1,1 +1,1 @@
-{"versionCode":44,"versionName":"2.3.0","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.3.0/YuHaoCast-v2.3.0.apk","notes":"基于2.1.5稳定版：播放界面去掉中央暂停/快进/快退按钮（确定键暂停、左右键快退快进）；两次返回键退出投屏；主界面底部显示版本号；仅保留YUHAO CAST标题；开机自启动；每次打开自动检查更新"}
+{"versionCode": 45, "versionName": "2.3.1", "url": "https://github.com/cat007321/YuHao-Cast/releases/download/v2.3.1/YuHaoCast-v2.3.1.apk", "notes": "播放缓冲上限提升至 256MB，高码率视频卡顿更少"}
