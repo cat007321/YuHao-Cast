@@ -21,20 +21,20 @@ object UpdateChecker {
     private const val KEY_UPDATE_URL = "update_url"
     private const val KEY_LAST_CHECK = "last_update_check"
 
-    /** 默认更新源：GitHub 仓库 version.json，经 ghproxy 加速（国内电视可直接访问、内容实时）。
-     *  jsDelivr 的 @main 解析缓存最长 12 小时且会故障回源，不再作为首选。 */
+    /** 默认更新源：GitHub 仓库 version.json，经 gh-proxy 加速。
+     *  国内实测：gh-proxy.com 可达，ghproxy.net / jsDelivr / gitmirror 均不可达，
+     *  故首选 gh-proxy.com（回源 GitHub 无缓存，内容实时）。 */
     const val DEFAULT_UPDATE_URL =
-        "https://ghproxy.net/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json"
+        "https://gh-proxy.com/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json"
 
-    /** 全部更新源镜像：首选失败后依次尝试。
-     *  gh-proxy.com 与 ghproxy.net 同为实时镜像（回源 GitHub 无缓存），排最前；
-     *  jsDelivr 系为缓存镜像（最长 12 小时），仅作兜底，放在实时镜像之后。 */
+    /** 全部更新源镜像：首选失败后依次尝试（按国内实际可达性排序，2026-10 实测）。 */
     private val UPDATE_MIRRORS = listOf(
         "https://gh-proxy.com/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json",
-        "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json",
+        "https://ghproxy.net/https://raw.githubusercontent.com/cat007321/YuHao-Cast/main/update/version.json",
         "https://cdn.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
         "https://fastly.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
-        "https://gcore.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json"
+        "https://gcore.jsdelivr.net/gh/cat007321/YuHao-Cast@main/update/version.json",
+        "https://raw.gitmirror.com/cat007321/YuHao-Cast/main/update/version.json"
     )
 
     class Info(
