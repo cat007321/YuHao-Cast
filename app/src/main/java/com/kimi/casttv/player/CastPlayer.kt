@@ -26,9 +26,9 @@ class CastPlayer(private val appContext: Context) {
     private val loadControl = DefaultLoadControl.Builder()
         // 关键：按字节封顶缓冲，而不是只按时间。手机 4K 长视频（10~30GB 片源）
         // 码率 40~100Mbps，按时间算缓冲会无限涨、把 128MB 堆打爆。
-        // 64MB 封顶：100Mbps 下约 5 秒、50Mbps 下约 10 秒、1080p 下约 60 秒；
+        // 256MB 封顶：100Mbps 下约 20 秒、50Mbps 下约 40 秒、1080p 下约 4 分钟；
         // 缓冲量不再随码率失控，又足够吸收 WiFi 抖动，避免"总是缓存"
-        .setTargetBufferBytes(64 * 1024 * 1024)
+        .setTargetBufferBytes(256 * 1024 * 1024)
         // 起播缓冲加深：首次起播等 4 秒、卡顿后再起播等 8 秒，宁可多等也不反复卡
         .setBufferDurationsMs(10_000, 15_000, 4_000, 8_000)
         // 回看缓冲缩到 5s：降低常驻内存，快进回退稍慢但稳定
