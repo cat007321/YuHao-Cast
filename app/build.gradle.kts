@@ -11,8 +11,8 @@ android {
         applicationId = "com.kimi.casttv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 39
-        versionName = "2.2.6"
+        versionCode = 40
+        versionName = "2.2.7"
     }
 
     buildTypes {

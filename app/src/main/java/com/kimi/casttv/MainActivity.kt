@@ -46,7 +46,7 @@ class MainActivity : android.app.Activity() {
         // 启动投屏服务
         ContextCompat.startForegroundService(this, Intent(this, DlnaService::class.java))
 
-        // 启动时自动检查更新（10 分钟内重复启动只查一次；发现新版本弹窗提示）
+        // 每次打开应用自动检查更新（发现新版本弹窗提示）
         UpdateChecker.maybeAutoCheck(this)
     }
 

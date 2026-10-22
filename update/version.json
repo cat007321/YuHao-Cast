@@ -1,1 +1,1 @@
-{"versionCode":39,"versionName":"2.2.6","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.6/YuHaoCast-v2.2.6.apk","notes":"播放失败时的错误提示更友好：识别视频源防盗链校验拒绝（403）和播放列表无效，给出可操作的解决建议"}
+{"versionCode":40,"versionName":"2.2.7","url":"https://github.com/cat007321/YuHao-Cast/releases/download/v2.2.7/YuHaoCast-v2.2.7.apk","notes":"每次打开应用都自动检查更新（取消10分钟节流）；播放失败错误提示更友好"}

@@ -71,15 +71,12 @@ object UpdateChecker {
             .edit().putString(KEY_UPDATE_URL, url.trim()).apply()
     }
 
-    /** 每次启动应用自动检查（10 分钟内重复启动不重复检查，避免 Activity 重建时重复请求）。
-     *  仅在已配置更新服务器时执行。发现新版本弹窗提示，已是最新则静默。 */
+    /** 每次打开应用都自动检查更新（发现新版本弹窗提示，已是最新则静默）。 */
     fun maybeAutoCheck(activity: Activity) {
         val url = updateUrl(activity)
         if (url.isEmpty()) return
         val prefs = activity.getSharedPreferences(DlnaPrefs.NAME, android.content.Context.MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        if (now - prefs.getLong(KEY_LAST_CHECK, 0L) < 10 * 60 * 1000) return
-        prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
+        prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
         checkInBackground(activity, url, showLatestDialog = false)
     }
 
